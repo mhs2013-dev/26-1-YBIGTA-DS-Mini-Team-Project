@@ -1,0 +1,23 @@
+# 논문 PDF 제외
+blip paper.pdf
+*.pdf
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 가상환경
+.venv/
+venv/S
+env/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 로그 / 임시파일
+*.log
+*.tmp

@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BLIP 미니 구현 초보자 설명서</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1e293b;
+      --muted: #64748b;
+      --line: #d8dee9;
+      --panel: #f7f9fc;
+      --accent: #146c94;
+      --code: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Malgun Gothic", Arial, sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+      line-height: 1.65;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 48px 28px 72px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 34px;
+      line-height: 1.2;
+      color: #102a43;
+    }
+    h2 {
+      margin: 42px 0 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      font-size: 24px;
+      color: #12324a;
+    }
+    h3 {
+      margin: 28px 0 8px;
+      font-size: 18px;
+      color: #1b4965;
+    }
+    p { margin: 10px 0; }
+    .lead {
+      font-size: 18px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    .callout {
+      background: #eaf6fb;
+      border: 1px solid #b9dce8;
+      border-left: 5px solid var(--accent);
+      padding: 14px 16px;
+      margin: 18px 0;
+      border-radius: 6px;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: #edf2f7;
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: var(--code);
+    }
+    pre {
+      overflow-x: auto;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 22px;
+      font-size: 15px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+    }
+    th {
+      background: var(--panel);
+      text-align: left;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 18px 0;
+    }
+    .step {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 12px;
+      min-height: 84px;
+    }
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #12324a;
+    }
+    @media print {
+      main { padding: 20px; max-width: none; }
+      h2 { break-after: avoid; }
+      pre, table, .callout, .step { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>BLIP 미니 구현 초보자 설명서</h1>
+  <p class="lead">이 문서는 현재 프로젝트의 코드를 처음 보는 사람이 파일 역할, 실행 흐름, BLIP 핵심 개념을 한 번에 따라갈 수 있게 만든 설명 자료입니다.</p>
+
+  <div class="callout">
+    핵심 문장: 이미지는 <code>image_tokens</code>가 되고, 문장은 <code>input_ids</code>가 되며, 둘은 <code>cross-attention</code>에서 만납니다.
+  </div>
+
+  <h2>1. 전체 구조</h2>
+  <pre><code>BLIP/
+├─ main.py
+├─ blip/
+│  ├─ __init__.py
+│  ├─ config.py
+│  ├─ data.py
+│  ├─ losses.py
+│  ├─ model.py
+│  └─ modules/
+│     ├─ blocks.py
+│     ├─ vision.py
+│     └─ text.py
+└─ docs/
+   ├─ README.md
+   └─ blip_beginner_guide.html</code></pre>
+
+  <table>
+    <tr><th>파일</th><th>역할</th><th>왜 따로 뒀나</th></tr>
+    <tr><td><code>main.py</code></td><td>실행 시작점</td><td>모델을 어떻게 쓰는지 한눈에 보기 위해</td></tr>
+    <tr><td><code>config.py</code></td><td>설정값 모음</td><td>모델 크기 조절을 한 곳에서 하기 위해</td></tr>
+    <tr><td><code>data.py</code></td><td>더미 데이터 생성</td><td>훈련 없이도 forward pass를 확인하기 위해</td></tr>
+    <tr><td><code>model.py</code></td><td>BLIPMini 본체</td><td>이미지, 텍스트, loss 연결을 모아 보기 위해</td></tr>
+    <tr><td><code>losses.py</code></td><td>ITC, ITM, LM loss</td><td>학습 목적을 모델 구조와 분리해 보기 위해</td></tr>
+    <tr><td><code>modules/vision.py</code></td><td>이미지 encoder</td><td>이미지 처리 부분을 독립적으로 보기 위해</td></tr>
+    <tr><td><code>modules/text.py</code></td><td>텍스트 encoder/decoder</td><td>문장 처리와 cross-attention을 보기 위해</td></tr>
+    <tr><td><code>modules/blocks.py</code></td><td>Transformer 부품</td><td>반복되는 attention, MLP 코드를 재사용하기 위해</td></tr>
+  </table>
+
+  <h2>2. 실행 흐름</h2>
+  <div class="flow">
+    <div class="step"><strong>1</strong>더미 이미지와 문장을 만듭니다.</div>
+    <div class="step"><strong>2</strong><code>BLIPMini</code> 모델을 생성합니다.</div>
+    <div class="step"><strong>3</strong>이미지를 ViT로 token화합니다.</div>
+    <div class="step"><strong>4</strong>문장을 token embedding으로 바꿉니다.</div>
+    <div class="step"><strong>5</strong>텍스트가 이미지를 cross-attention으로 참고합니다.</div>
+    <div class="step"><strong>6</strong>ITC, ITM, LM loss를 계산합니다.</div>
+  </div>
+
+  <pre><code>python main.py</code></pre>
+
+  <p>출력은 다음처럼 나옵니다.</p>
+  <pre><code>BLIP-mini dummy run | images=(2, 3, 64, 64) | text=(2, 32) | image_tokens=(2, 17, 128) | ITC=..., ITM=..., LM=..., total=...
+sample text: a small cat on the desk</code></pre>
+
+  <h2>3. BLIP이 하는 일</h2>
+  <p>BLIP은 이미지와 텍스트를 같이 이해하는 모델입니다. 이미지에 맞는 문장을 찾거나, 이미지 설명문을 만들거나, 이미지와 텍스트를 같은 벡터 공간에 놓는 일을 합니다.</p>
+
+  <table>
+    <tr><th>BLIP 논문 개념</th><th>현재 코드</th></tr>
+    <tr><td>Image Encoder</td><td><code>VisionTransformer</code></td></tr>
+    <tr><td>Text Encoder</td><td><code>TextTransformer</code></td></tr>
+    <tr><td>Image-grounded Text Encoder</td><td><code>self.text(input_ids, image_tokens=image_tokens)</code></td></tr>
+    <tr><td>Image-grounded Text Decoder</td><td><code>self.text.logits(..., causal=True)</code></td></tr>
+    <tr><td>Image-Text Contrastive Loss</td><td><code>image_text_contrastive_loss</code></td></tr>
+    <tr><td>Image-Text Matching Loss</td><td><code>image_text_matching_loss</code></td></tr>
+    <tr><td>Language Modeling Loss</td><td><code>language_modeling_loss</code></td></tr>
+  </table>
+
+  <h2>4. main.py 읽기</h2>
+  <pre><code>config = BLIPConfig()
+model = BLIPMini(config)
+images, input_ids, texts = make_dummy_batch(config)
+out = model(images, input_ids)</code></pre>
+
+  <p><code>config</code>는 모델 조절판입니다. <code>model</code>은 실제 BLIP 미니 모델입니다. <code>images</code>와 <code>input_ids</code>는 모델에 넣을 입력입니다. <code>out</code>에는 중간 결과와 loss가 들어 있습니다.</p>
+
+  <h2>5. config.py 읽기</h2>
+  <p><code>BLIPConfig</code>는 모델 크기를 정합니다.</p>
+  <pre><code>image_size = 64
+patch_size = 16
+vocab_size = 128
+max_text_len = 32
+embed_dim = 128
+vision_layers = 2
+text_layers = 2
+num_heads = 4</code></pre>
+
+  <p>이 값을 따로 둔 이유는 실험할 때 한 파일만 고치면 되게 하기 위해서입니다.</p>
+
+  <h2>6. data.py 읽기</h2>
+  <p>현재는 훈련이 목적이 아니므로 진짜 데이터셋 대신 랜덤 이미지와 간단한 문장을 씁니다.</p>
+  <pre><code>images = torch.randn(len(texts), 3, config.image_size, config.image_size)
+input_ids = tokenizer.encode(texts)</code></pre>
+
+  <table>
+    <tr><th>shape</th><th>뜻</th></tr>
+    <tr><td><code>(2, 3, 64, 64)</code></td><td>이미지 2장, RGB 3채널, 64x64 크기</td></tr>
+    <tr><td><code>(2, 32)</code></td><td>문장 2개, 각 문장을 최대 32개 token으로 표현</td></tr>
+  </table>
+
+  <h2>7. vision.py 읽기</h2>
+  <p><code>VisionTransformer</code>는 이미지를 patch로 쪼갭니다.</p>
+  <pre><code>64 x 64 이미지
+→ 16 x 16 patch가 가로 4개, 세로 4개
+→ 총 16개 patch
+→ CLS token 1개 추가
+→ 총 17개 image token</code></pre>
+
+  <p>그래서 출력 shape가 <code>(2, 17, 128)</code>이 됩니다.</p>
+
+  <h2>8. text.py 읽기</h2>
+  <p><code>SimpleTokenizer</code>는 문자를 숫자로 바꿉니다. 딥러닝 모델은 문자열을 직접 읽지 못하므로 token id가 필요합니다.</p>
+
+  <table>
+    <tr><th>token</th><th>id</th><th>의미</th></tr>
+    <tr><td>PAD</td><td>0</td><td>빈 칸 채우기</td></tr>
+    <tr><td>BOS</td><td>1</td><td>문장 시작</td></tr>
+    <tr><td>EOS</td><td>2</td><td>문장 끝</td></tr>
+    <tr><td>UNK</td><td>3</td><td>모르는 문자</td></tr>
+  </table>
+
+  <p><code>TextTransformer</code>는 세 가지 방식으로 쓰입니다.</p>
+  <table>
+    <tr><th>호출 방식</th><th>역할</th></tr>
+    <tr><td><code>self.text(input_ids)</code></td><td>문장만 읽는 text encoder</td></tr>
+    <tr><td><code>self.text(input_ids, image_tokens=image_tokens)</code></td><td>이미지를 참고하는 text encoder</td></tr>
+    <tr><td><code>self.text.logits(..., causal=True)</code></td><td>다음 token을 예측하는 decoder</td></tr>
+  </table>
+
+  <h2>9. blocks.py 읽기</h2>
+  <p><code>TransformerBlock</code>은 자기 자신끼리 attention합니다. 이미지 patch끼리 보거나, text token끼리 보는 데 씁니다.</p>
+  <p><code>CrossAttentionBlock</code>은 텍스트가 이미지를 보게 합니다. 이 부분이 이미지와 텍스트가 실제로 만나는 핵심입니다.</p>
+
+  <h2>10. model.py 읽기</h2>
+  <pre><code>image_tokens, image_feat = self.encode_image(images)
+text_feat = self.encode_text(input_ids)
+grounded_text = self.text(input_ids, image_tokens=image_tokens)
+itm_scores = self.itm_head(grounded_text[:, 0])
+caption_logits = self.text.logits(input_ids, image_tokens=image_tokens, causal=True)</code></pre>
+
+  <p>여기서 <code>image_feat</code>와 <code>text_feat</code>는 ITC loss에 쓰입니다. <code>grounded_text</code>는 ITM loss에 쓰입니다. <code>caption_logits</code>는 LM loss에 쓰입니다.</p>
+
+  <h2>11. losses.py 읽기</h2>
+  <table>
+    <tr><th>loss</th><th>목적</th></tr>
+    <tr><td>ITC</td><td>맞는 이미지와 문장을 가까운 벡터로 만듭니다.</td></tr>
+    <tr><td>ITM</td><td>이미지와 문장이 맞는 쌍인지 분류합니다.</td></tr>
+    <tr><td>LM</td><td>이미지를 참고해서 다음 token을 맞힙니다.</td></tr>
+  </table>
+
+  <h2>12. 이 구현에서 단순화한 부분</h2>
+  <table>
+    <tr><th>실제 BLIP</th><th>현재 구현</th></tr>
+    <tr><td>큰 pretrained ViT</td><td>작은 ViT 직접 구현</td></tr>
+    <tr><td>BERT tokenizer</td><td>문자 단위 SimpleTokenizer</td></tr>
+    <tr><td>큰 이미지-텍스트 데이터셋</td><td>랜덤 이미지와 더미 문장</td></tr>
+    <tr><td>hard negative mining</td><td>제외</td></tr>
+    <tr><td>caption filtering, bootstrapping</td><td>제외</td></tr>
+    <tr><td>실제 학습 루프</td><td>제외</td></tr>
+  </table>
+
+  <h2>13. 추천 공부 순서</h2>
+  <ol>
+    <li><code>main.py</code>에서 전체 흐름을 봅니다.</li>
+    <li><code>config.py</code>에서 모델 설정값을 봅니다.</li>
+    <li><code>data.py</code>에서 입력 shape를 봅니다.</li>
+    <li><code>vision.py</code>에서 이미지가 patch token으로 바뀌는 과정을 봅니다.</li>
+    <li><code>text.py</code>에서 문장이 token embedding으로 바뀌는 과정을 봅니다.</li>
+    <li><code>model.py</code>에서 이미지와 텍스트가 만나는 지점을 봅니다.</li>
+    <li><code>losses.py</code>에서 세 loss의 목적을 봅니다.</li>
+  </ol>
+
+  <div class="callout">
+    정리: ITC는 이미지와 텍스트를 같은 공간에 놓고, ITM은 둘이 맞는 쌍인지 판단하고, LM은 이미지를 보고 다음 token을 맞힙니다.
+  </div>
+</main>
+</body>
+</html>
