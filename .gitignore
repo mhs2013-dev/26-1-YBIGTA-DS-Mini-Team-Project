@@ -1,5 +1,4 @@
 # 논문 PDF 제외
-blip paper.pdf
 *.pdf
 
 # Python cache
